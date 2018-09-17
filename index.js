@@ -1,59 +1,60 @@
-const axios = require('axios')
+const https = require('https')
 const fs = require('fs')
-let page = 1
+let photos = []
+let opt = 'full' // raw, full, regular, small, thumb
 
-
-
-// 获取图片分页数据
-function getImageDataByPage () {
-  axios.get('https://unsplash.com/napi/users/doubibi/likes', {
-    params: { page: page, per_page: 10, order_by: 'lateest' }
-  }).then(res => {
-    console.log(`Get ${res.data.length} data.`)
-  }).catch(e => {
+function getImageData (page = 1) {
+  console.log('Get data from unsplash...')
+  https.get(`https://unsplash.com/napi/users/doubibi/likes?page=${page}&per_page=10&order_by=lateest`, res => {
+    let data = ''
+    res.on('data', chunk => { data += chunk })
+    res.on('end', () => {
+      data = JSON.parse(data)
+      if (data.length) {
+        photos = photos.concat(data)
+        getImageData(page + 1)
+      } else {
+        console.log(`Get ${photos.length} data.`)
+        downloadImg()
+      }
+    })
+  }).on("error", err => {
     console.error('Error: ' + e.message)
   })
 }
-// 获取图片
-function getImg (url) {
-  return axios.get(url, { responseType: 'blob' }).then(res => {
-    console.log(url)
-  }).catch(e => {
-    console.error('Error: ' + e.message)
-  })
+
+function downloadImg (i = 0) {
+  const img = photos[i]
+  if (!img) {
+    console.log('All photos has been download.')
+    return
+  }
+  const url = img.urls[opt]
+  console.log('Start download img.')
+  const str = url.match(/\&s=\w+/)
+  const name = str ? str[0].replace('&s=', '') : Math.random().toString(16).substr(2)
+  fs.stat(`./download/${name}.jpg`, (err, stat) => {
+    if (stat && stat.isFile()) {
+      console.log('File already exists.')
+      downloadImg(i + 1)
+    } else {
+      https.get(url, res => {
+        let data = ''
+        res.setEncoding("binary")
+        res.on('data', chunk => { data += chunk })
+        res.on('end', () => {
+          fs.writeFile(`./download/${name}.jpg`, data, 'binary', e=> {
+            if (e) console.error('Error: ' + e.message)
+            else console.log(`${i + 1} photo saved.`)
+            downloadImg(i + 1)
+          })
+        })
+      }).on('error', e => {
+        console.error('Error: ' + e.message)
+        downloadImg(i + 1)
+      })
+    }
+  })   
 }
-// 保存图片
-function saveImg (imgData) {
-  fs.writeFile('./download/', imgData, 'binary', e => {
-    if (e) console.error('Error: ' + e.message)
-    else console.log('Image saved.')
-  })
-}
 
-// function getImgDataByPage () {
-//   https.get(`https://unsplash.com/napi/users/doubibi/likes?page=${page}&order_by=latest`, res => {
-//     let data = ''
-//     res.on('data', chunk => { data += chunk })
-//     res.on('end', () => {
-//       data = JSON.parse(data)
-//       if (data.length) {
-//         saveImg(data, () => {
-//           page += 1
-//           getImgData()
-//         })
-//       } else {
-//         console.log('Saved all img.')
-//       }
-//     })
-//   }).on('error', err => {
-//     console.log('ERROR: ' + err.message)
-//   })
-// }
-
-getImageDataByPage()
-
-
-    // fs.writeFile('like.html', data, e => {
-    //   if (e) return console.error(e)
-    //   console.log('Html saved.')
-    // })
+getImageData()

@@ -9,6 +9,5 @@
   "author": "xianziycg@gmail.com",
   "license": "ISC",
   "dependencies": {
-    "axios": "^0.18.0"
   }
 }
